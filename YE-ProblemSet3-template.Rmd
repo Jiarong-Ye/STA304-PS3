@@ -1,0 +1,106 @@
+---
+title: "Prediction of 2020 American Federal Election"
+author: "Jiarong Ye"
+date: "2 November, 2020"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+
+# Loading in the cleaned survey Data
+survey_data <- read_csv("survey_data.csv")
+
+# Loading in the cleaned census Data
+census_data <- read_csv("census_data.csv")
+
+
+```
+
+
+
+# Model
+
+
+## Model Specifics
+  I will be using a logistic regression model to model the proportion of voters who will vote for Donald Trump. The reason why the logistic regression model is used because my Y variable is binary meaning either vote for Trump or not, value 1 represents vote for Trump and value 0 represents not vote for Trump. I will be using age, gender and region to model the probability of voting for Donald Trump. The logistic regression model I am using is:
+
+$$ log(\frac{p}{1-p}) = \beta_0+\beta_1x_{Age} + \beta_2x_{Male} + \beta_3x_{Northeast} + \beta_4x_{South} + \beta_5x_{West} + \epsilon$$
+
+Where $p$ represents the probability of the people voting for Trump. Similarly, $\beta_0$ represents the intercept of the model, and is the probability of voting for Donald Trump at age 0 from region Midwest. Additionally, for everyone one unit increase in age, we expect a $\beta_1$ increase in the probability of voting for Donald Trump. For everyone one unit who is male, we expect a $\beta_2$ increase in the probability of voting for Donald Trump as well. However, $\beta_3$, $\beta_4$ and $\beta_5$ we do not know their relationship with region Midwest, further information will be explored later. 
+
+### Model 1:
+```{r echo=FALSE}
+
+# Creating the Model
+model <- glm(vote_trump ~ age + gender + census_region, 
+            data=survey_data, family="binomial")
+
+# Model Results (to Report in Results section)
+summary(model)
+# OR
+# broom::tidy(model)
+```
+
+## Post-Stratification 
+
+  In order to estimate the proportion of voters who will vote for Donald Trump I need to perform a post-stratification analysis. Here I create cells based off different ages, genders and regions. Using the model described in the previous sub-section I will estimate the proportion of voters in each age bin. I will then weight each proportion estimate (within each bin) by the respective population size of that bin and sum those values and divide that by the entire population size. The reason why I think ages and genders are variables that influence the possibility of Trump being elected is because people in different ages and genders has different ways of thinking things, so their opinion toward Trump might be different. Regions could also be a influential variable since the country is big and development in different regions of U.S. is different, so it causes people have different living styles in different regions, so their thoughts to politics would also be different. 
+
+### Table 1:
+
+```{r echo=FALSE}
+census_data<-
+  census_data %>%
+  mutate(age = age + 2) %>%
+  filter(age >= 18)
+
+# Here I will perform the post-stratification calculation
+census_data$estimate <-
+  model %>%
+  predict(newdata = census_data, type = "response")
+glimpse(census_data)
+
+census_data %>% 
+  mutate(alp_predict_prop = estimate*n) %>%
+  summarise(alp_predict = sum(alp_predict_prop)/sum(n))
+
+```
+
+
+# Results
+Model 1 represents the logistic regression, below is how logistic regression being expressed.
+
+$$log(\frac{p}{1-p}) = -1.1620 + 0.0147x_{Age} + 0.5347x_{Male} - 0.1018x_{Northeast} + 0.1996x_{South} - 0.1320x_{West}$$
+  p represents the probability of the event of interest occurring, here it refers to the probability that Donald Trump can be re-elected in 2020. The intercept, $\hat{\beta0}$ here is -1.1620. It is also a log of odds when $\hat{x_{age}}$, $\hat{x_{Male}}$, $\hat{x_{Northeast}}$, $\hat{x_{South}}$ and $\hat{x_{West}}$ are zero. Only $\hat{x_{age}}$ here is a numerical predictor variable, others are categorical predictor variables.The positive coefficient, $\hat{\beta1}$ suggests that for every additional unit increase in age we expect the log odds of Trump being re-elected increase by 0.0147 for both female and male groups from all regions across the U.S. $\hat{\beta2}$ here indicates the difference in average value between two groups, male and female is 0.5347. It implies that men are more willing to vote for Trump than women. Let's now look at coefficients for regions. $\hat{\beta3}$, $\hat{\beta4}$ and $\hat{\beta5}$ represent the difference in average value between their corresponding region and region Midwest, the differences are -0.1018, 0.1996 and -0.1320. The two negative coefficients are $\hat{\beta3}$ and $\hat{\beta5}$. It delivers a message that less people for all genders and ages would vote for Trump from region Northeast and West comparing to people from region Midwest. However, $\hat{\beta4}$ is a positive coefficient meaning Trump has more supporters in region South than in region Midwest. Now, we have to use the logistic model to do Post-Stratification by taking advantage of demographics to extrapolate how entire population will vote. The census data I used is in 2018, but now we are in 2020 so in early data cleaning process, I changed everyone's age two years older. Only citizens of U.S who are 18 or over 18 years old are able to vote, thus I deleted all people that do not own a American citizenship and people who are not reach 18 years old are also deleted from the census data. Since variables for both survey and census have to be same so they can be used for post-stratification. However, the categorical variable, region from my census data, it is more specific than my survey data. Therefore, I assigned them into only four different regions in order to keep them same as my survey data. For example, according to the geographic map of U.S. I combined east north central div and west north central div into Midwest. After the census data is rearranged, the table 1 below Post-Stratification is made. The table shows that it partition the census data into 640 demographic cells. Each cell is a demographic to a unique combination of gender, region and age. Each cell also includes the estimate response variable, the probability of Donald Trump being re-elected that is calculated by the logistic model introduced previously. How could we get the final prediction by Post-Stratification? We first use estimate of each cell times its corresponding population size and then take the sum of the value from every single one of the cell, lastly divide it by the entire population size. Here $\hat{y}^{ps}=0.4740$. The prediction of probability of Donald Trump being re-elected in entire population size is 47.40 %.
+
+# Discussion
+
+## Summary
+  I did data cleaning process for both survey and census data. I then created logistic regression model by using the survey data. The model is used to see the how could variables affect the probility of Trump being re-elected.  Post-Stratification is started, I divided the census data into many demographic cell and each cell contains estimate response variable calculated based on the logistic regression model. Lastly, after some calculation the probability of Trump being re-elected in the entire population size is predicted.
+  
+
+## Conclusion
+  From the results, we have found older people are more willing to vote for Trump than younger people. This is because four years ago Trump claimed he will make America great again, but today there are still many old people would believe him because of old people’s nostalgia. Some young people especially college students, they do not pay attention to politics, some of them do not even know the voting process and they just abstain from voting. Young people cares about future, however just 30 percent of millennial voters (ages 24 to 39) say they feel confident that their children generation will be better than theirs has been. Young people also really cares about economy, they think that the economy has been hit hard due to Trump's trade war, they have already lost trust on Trump.
+Trump is tend to be more appeal among men. According to a interview, most of the Mexican-American men think that the macho allure of Mr. Trump is undeniable. He is forceful, wealthy and, most important, unapologetic. In a world where at any moment someone might be attacked for saying the wrong thing, he says the wrong thing all the time and does not bother with self-flagellation. However, most of the women think Trump is too aggressive, women dislike his behaviors and manners. Safety is something women really care. However, Trump said he is going to cut $25 billion from Social Security. Trump has many supporters from the South region since in 2016 Trump addresses issues in that have long resonated in the South: criticism of the federal government, attacks on illegal immigration, protests of foreign trade deals and pledges to bolster the military. People from West region do not really satisfied with Trump, since the 2020 wildfire in west coast has destroyed a total of 4,800 structures, including 1,145 homes and also cause serious air pollution. However, Trump barely paid attention and blamed forest management, it makes Western people disappointed.
+
+## Weaknesses & Next Steps
+
+  The census data is not up to date and it is from 2018. Many things could be happened between year 2018 and 2020. For example, some people might past away so the population size cannot represent for today. During the Post-Stratification process, we assume everyone in census data is going to vote for the election. However, in fact many people would choose to abstain from voting so lead to inaccuracy of population size. The categorical variable, regions in census data and survey data have different values. I have to make them same in order to do Post-Stratification. However, the revised values could not 100% express the original values. The next step is to wait for the real election outcome to happen, and compare the real probability to my predicted probability. If my prediction is close to the actual outcome then it means I am using the correct method and knowledge from this course. If the outcome is quite different from my prediction, then I have to read some relative expert analysis and reports and reflect on my work to find what were the problems affecting my prediction and how should I avoid them next time.
+
+
+
+
+# References
+
+Miao, Hannah. Young Voters Are Poised to Be a Decisive Factor Even as Coronavirus Creates Obstacles. 27 Oct. 2020, www.cnbc.com/2020/10/26/2020-election-young-voters-could-be-a-decisive-force-despite-coronavirus.html. 
+
+Ball, Molly. “Trump's Graying Army.” The Atlantic, Atlantic Media Company, 25 Oct. 2016, www.theatlantic.com/politics/archive/2016/10/trumps-graying-army/505274/. 
+
+Shah, D. (2020, September 17). US election: Are older Trump voters sticking with him? Retrieved November 02, 2020, from https://www.bbc.com/news/election-us-2020-54099242
+
+
+
+
